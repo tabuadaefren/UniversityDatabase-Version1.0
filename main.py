@@ -15,20 +15,9 @@ conn.execute('''CREATE TABLE IF NOT EXISTS student(
     MName TEXT,
     LName TEXT, 
     Sex TEXT, 
-    Course TEXT REFERENCES courses(CourseID) ON DELETE RESTRICT, 
+    Course TEXT, 
     YrLevel INTEGER)''')
-
-#Create course Table
-#--------------------------------------------------
-conn.execute('''CREATE TABLE IF NOT EXISTS courses(
-    CourseID TEXT PRIMARY KEY  NOT NULL, 
-    CourseTitle TEXT,
-    College TEXT )''')
-
 conn.close()
-
-
-
 
 #--------------------------------------------------
 #| -- HOME PAGE -- |
@@ -37,16 +26,12 @@ def main():
     return render_template("index-students.html")
 
 #| -- Methods for Students -- |
+#--------------------------------------------------
 
 #| -- ADD METHODS -- |
 @app.route("/add",methods = ['POST','GET'])
 def add():
-    with sql.connect("database.db") as conn:
-        conn.row_factory = sql.Row
-        cur = conn.cursor()
-        cur.execute("SELECT * FROM courses")
-        data = cur.fetchall()
-    return render_template("add.html", data=data)
+    return render_template("add.html")
     conn.close()
 
 @app.route("/add_submit",methods = ['POST','GET'])
@@ -63,14 +48,13 @@ def add_submit():
             
             with sql.connect("database.db") as conn:
                 cur = conn.cursor()
-                cur.execute("PRAGMA foreign_keys=ON")
                 cur.execute("INSERT INTO student(IDNum, FName, MName,  LName, Sex, Course,YrLevel) VALUES(?,?,?,?,?,?,?)",
                     (id_number,firstname,middle,lastname,sex,course,Yr))
                 conn.commit()
                 msg= "Adding Successful! "
         except:
         	conn.rollback()
-        	msg = "Error adding due to foreign key constraint."
+        	msg = "Error adding."
 
         finally:
         	conn = sql.connect("database.db")
@@ -78,10 +62,9 @@ def add_submit():
         	cur = conn.cursor()
         	cur.execute("SELECT * FROM student")
         	rows = cur.fetchall()
-        	return render_template("add_result.html", rows=rows, msg=msg,)
+        	return render_template("add_result.html", rows=rows, msg=msg)
         	conn.close()
 # -- End Add Methods --
-
 
 # -- DISPLAY TABLE -view table --
 @app.route("/view",methods = ['POST','GET'])
@@ -94,7 +77,6 @@ def view():
     return render_template("add_result.html", rows=rows)
     conn.close()
 
-
 # -- DELETE METHODS --
 @app.route("/delete", methods = ['POST', 'GET'])
 def delete():
@@ -102,41 +84,41 @@ def delete():
     conn.row_factory = sql.Row
     cur = conn.cursor()
     cur.execute("SELECT * FROM student")
-    rows_del = cur.fetchall()
+    rows = cur.fetchall()
     conn.close()
-    return render_template("delete.html", rows=rows_del)
+    return render_template("delete.html", rows=rows)
 
 @app.route("/delete_result",methods = ['POST','GET'])
 def delete_result():
     if request.method == "POST":
         try:
-            id_number = request.form['ID_Num']
+            SearchKey = request.form['ID_Num'].upper()
             with sql.connect("database.db") as conn:
                 cur = conn.cursor()
-                cur.execute("SELECT * FROM student")
-                for row in cur.fetchall():
-                    if row[0] == id_number:
-                        cur.execute("DELETE FROM student WHERE IDNum = ?", (id_number,))
-                        conn.commit()
-                        msg = "Successfully Deleted"
-                        flag=1
-                        break
-                    else:
-                        flag=0
-                        msg = "Error! Student not found."
+                cur.execute("SELECT * FROM student where IDNum = ? or FName = ? or LName=? or MName=?  or Sex=? or YrLevel=? or Course=?", (SearchKey, SearchKey, SearchKey, SearchKey, SearchKey, SearchKey, SearchKey ))
+                result = cur.fetchall()
+                if len(result)>0:
+                    flag = 1
+                    print("Student/s found!")
+                    print(len(result))
+                    cur.execute("DELETE FROM student where IDNum = ? or FName = ? or LName=? or MName=?  or Sex=? or YrLevel=? or Course=?", (SearchKey, SearchKey, SearchKey, SearchKey, SearchKey, SearchKey, SearchKey ))
+                    conn.commit()
+                    msg = "Successfully Deleted."
+                    print("Successfully Deleted.")
+                else:
+                    flag = 0
+                    print(len(result))
+                    msg = "Error! Student not found."
+                    print("Student not found.")
         except:
-            msg = "Fail to delete"
-            
+            msg = "Failed to delete"
         finally:
-            if flag == 1:
-                conn = sql.connect("database.db")
-                conn.row_factory = sql.Row
-                cur = conn.cursor()
-                cur.execute("SELECT * FROM student")
-                rows = cur.fetchall()
-            else:
-                rows = " "
-            return render_template("add_result.html", rows=rows, msg=msg,)
+            conn = sql.connect("database.db")
+            conn.row_factory = sql.Row
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM student")
+            rows = cur.fetchall()
+            return render_template("add_result.html", rows=rows, msg=msg)
         conn.close()
 # -- End of Delete Methods --
 
@@ -159,13 +141,16 @@ def update_search():
             with sql.connect("database.db") as conn:
                 cur = conn.cursor()
                 cur.execute("SELECT * FROM student")
-                for row in cur.fetchall():
-                    if row[0] == id_number:
+                stud = cur.fetchall()
+                for row in stud:
+                    if row[0] == id_number: 		#search using ID number (index 0)
+                        print("entered in if")
                         copied = row
                         msg = " Student Found!"
                         flag = 1
                         break
                     else:
+                        print("entered in else")
                         msg = "Error! Student not found."
                         flag=0
                         copied = " "
@@ -176,10 +161,10 @@ def update_search():
             copied = " "
         finally:
             if flag == 1:
-                return render_template("update_info.html", msg =msg, copied=copied, id_number=id_number, )
+                return render_template("update_info.html", msg =msg, copied=copied)
                 conn.close()
             else:
-                return render_template("update_search_fail.html", msg =msg, copied=copied, id_number=id_number, )
+                return render_template("update_search_fail.html", msg =msg, copied=copied )
                 conn.close()
 
 @app.route("/update_submit",methods = ['POST', 'GET'])
@@ -200,9 +185,6 @@ def update_submit():
                 for row in cur.fetchall():
                     if row[0] == id_old:
                         if(len(course)>0):
-                            print("before pragma")
-                            cur.execute("PRAGMA foreign_keys=ON")
-                            print("entered after pragma")
                             cur.execute("UPDATE student set Course = ? where IDNum = ?",( course, id_old))
                         if(len(firstname)>0):
                             cur.execute("UPDATE student set FName = ? where IDNum = ?",( firstname, id_old))
@@ -225,7 +207,7 @@ def update_submit():
             cur = conn.cursor()
             cur.execute("SELECT * FROM student")
             rows = cur.fetchall()
-            return render_template("update_success.html", rows=rows, )
+            return render_template("update_success.html", rows=rows )
             conn.close()
 # -- End of Update Methods --
 
@@ -262,30 +244,11 @@ def search_input():
             else:
                 msg="Search successful!"
                 print("entered else")
-            return render_template("search_result.html", msg=msg, row=row,)
+            return render_template("search_result.html", msg=msg, row=row)
             conn.close()
         
 #---------------------------------------------------
 #End Manage Students
-
-
-
-# Methods for Manage Courses
-#----------------------------------------------------
-
-# -- DISPLAY COURSE TABLE -view table --
-@app.route("/view_course",methods = ['POST','GET'])
-def view_course():
-    conn = sql.connect("database.db")
-    conn.row_factory = sql.Row
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM courses")
-    rows = cur.fetchall()
-    return render_template("add_result-course.html", rows=rows)
-    conn.close()
-
-#----------------------------------------------------
-# End Manage Courses
 
 
 if __name__ == "__main__":
