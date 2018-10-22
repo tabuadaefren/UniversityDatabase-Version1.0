@@ -101,7 +101,7 @@ input[type=text]:focus {
 .add_form label{
   text-align: left;
   display: inline-block;
-  width:140px;
+  width:240px;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
